@@ -93,8 +93,7 @@ The system separates concerns across three clear boundaries:
 │   ├── monitor.py        # Training monitoring with TensorBoard
 │   └── dataset.jsonl     # Generated training dataset
 ├── Dockerfile            # Containerization configuration
-├── k8s-deployment.yaml # Comprehensive Kubernetes deployment manifests
-├── manifest.yaml         # Basic Kubernetes deployment manifests
+├── manifest.yaml         # Comprehensive Kubernetes deployment manifests
 ├── requirements.txt      # Python dependencies
 ├── run_live_agent.py     # Interactive agent testing interface
 ├── setup.py             # Automated setup script
@@ -199,12 +198,12 @@ docker run -p 6006:6006 holmesgpt-ft python3 monitor.py
 ### Kubernetes Deployment
 ```bash
 # Deploy all components
-kubectl apply -f k8s-deployment.yaml
+kubectl apply -f manifest.yaml
 
 # Deploy specific components
-kubectl apply -f k8s-deployment.yaml -l component=data-pipeline
-kubectl apply -f k8s-deployment.yaml -l component=training
-kubectl apply -f k8s-deployment.yaml -l component=monitoring
+kubectl apply -f manifest.yaml -l component=data-pipeline
+kubectl apply -f manifest.yaml -l component=training
+kubectl apply -f manifest.yaml -l component=monitoring
 
 # Check deployment status
 kubectl get pods -n holmesgpt-ft
@@ -230,7 +229,7 @@ kubectl create job holmesgpt-data-pipeline \
 kubectl scale deployment holmesgpt-training --replicas=1 -n holmesgpt-ft
 
 # Or use Ray Job for distributed training
-kubectl apply -f k8s-deployment.yaml -l component=ray-job
+kubectl apply -f manifest.yaml -l component=ray-job
 ```
 
 #### 3. Monitoring Mode

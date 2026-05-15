@@ -4,71 +4,36 @@ metadata:
   name: holmesgpt-ft
 
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: holmesgpt-training
-  namespace: holmesgpt-ft
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: holmesgpt-training
-  template:
-    metadata:
-      labels:
-        app: holmesgpt-training
-    spec:
-      containers:
-      - name: training-container
-        image: holmesgpt-ft:latest
-        resources:
-          requests:
-            cpu: "2"
-            memory: "8Gi"
-          limits:
-            cpu: "4"
-            memory: "16Gi"
-        volumeMounts:
-        - name: training-data
-          mountPath: /app/training_engine/skills
-        - name: output-data
-          mountPath: /app/output
-        env:
-        - name: WANDB_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: wandb-secret
-              key: api-key
-        - name: RAY_DISABLE_IMPORT_WARNING
-          value: "1"
-      volumes:
-      - name: training-data
-        configMap:
-          name: training-skills
-      - name: output-data
-        emptyDir: {}
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: holmesgpt-training-service
-  namespace: holmesgpt-ft
-spec:
-  selector:
-    app: holmesgpt-training
-  ports:
-  - port: 8265
-    targetPort: 8265
-    name: ray-dashboard
-  type: ClusterIP
-
----
+# ConfigMap for shared configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: training-skills
+  name: holmesgpt-config
+  namespace: holmesgpt-ft
+data:
+  # Training configuration
+  training-config.yaml: |
+    model_id: "Qwen/Qwen2.5-7B-Instruct"
+    learning_rate: 3e-6
+    batch_size: 2
+    epochs: 2
+    
+  # Ray configuration
+  ray-config.yaml: |
+    head_resources:
+      cpu: "4"
+      memory: "16Gi"
+    worker_resources:
+      cpu: "8"
+      memory: "32Gi"
+      gpu: "1"
+
+---
+# ConfigMap for skills data
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: holmesgpt-skills
   namespace: holmesgpt-ft
 data:
   incident_001.md: |
@@ -94,3 +59,250 @@ data:
     ```
     # Resolution
     The high memory usage issue was resolved by reducing memory limits and adding resource quotas.
+
+---
+# Training Job - Data Pipeline Mode
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: holmesgpt-data-pipeline
+  namespace: holmesgpt-ft
+  labels:
+    component: data-pipeline
+spec:
+  template:
+    spec:
+      containers:
+      - name: data-pipeline
+        image: holmesgpt-ft:latest
+        command: ["python3", "convert.py"]
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+        - name: training-data
+          mountPath: /app/training_engine/skills
+        - name: output-data
+          mountPath: /app/output
+      restartPolicy: Never
+      volumes:
+      - name: training-data
+        configMap:
+          name: holmesgpt-skills
+      - name: output-data
+        emptyDir: {}
+
+---
+# Training Deployment - Training Mode
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: holmesgpt-training
+  namespace: holmesgpt-ft
+  labels:
+    component: training
+spec:
+  replicas: 0  # Start with 0, scale up when needed
+  selector:
+    matchLabels:
+      app: holmesgpt-training
+  template:
+    metadata:
+      labels:
+        app: holmesgpt-training
+    spec:
+      containers:
+      - name: training-container
+        image: holmesgpt-ft:latest
+        command: ["python3", "train.py"]
+        resources:
+          requests:
+            cpu: "4"
+            memory: "16Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "8"
+            memory: "32Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: training-data
+          mountPath: /app/training_engine/skills
+        - name: output-data
+          mountPath: /app/output
+        - name: logs
+          mountPath: /app/training_engine/ray_qwen_k8s_output/logs
+        env:
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-secret
+              key: api-key
+        - name: RAY_DISABLE_IMPORT_WARNING
+          value: "1"
+        ports:
+        - containerPort: 8265
+          name: ray-dashboard
+        - containerPort: 6006
+          name: tensorboard
+      volumes:
+      - name: training-data
+        configMap:
+          name: holmesgpt-skills
+      - name: output-data
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+
+---
+# Monitoring Deployment - Monitoring Mode
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: holmesgpt-monitor
+  namespace: holmesgpt-ft
+  labels:
+    component: monitoring
+spec:
+  replicas: 0  # Start with 0, scale up when needed
+  selector:
+    matchLabels:
+      app: holmesgpt-monitor
+  template:
+    metadata:
+      labels:
+        app: holmesgpt-monitor
+    spec:
+      containers:
+      - name: monitor-container
+        image: holmesgpt-ft:latest
+        command: ["python3", "monitor.py", "--port", "6006"]
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+        - name: logs
+          mountPath: /app/training_engine/ray_qwen_k8s_output/logs
+        ports:
+        - containerPort: 6006
+          name: tensorboard
+      volumes:
+      - name: logs
+        emptyDir: {}
+
+---
+# Services
+apiVersion: v1
+kind: Service
+metadata:
+  name: holmesgpt-training-service
+  namespace: holmesgpt-ft
+spec:
+  selector:
+    app: holmesgpt-training
+  ports:
+  - port: 8265
+    targetPort: 8265
+    name: ray-dashboard
+  - port: 6006
+    targetPort: 6006
+    name: tensorboard
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: holmesgpt-monitor-service
+  namespace: holmesgpt-ft
+spec:
+  selector:
+    app: holmesgpt-monitor
+  ports:
+  - port: 6006
+    targetPort: 6006
+    name: tensorboard
+  type: ClusterIP
+
+---
+# Example: Ray Job for distributed training
+apiVersion: ray.io/v1alpha1
+kind: RayJob
+metadata:
+  name: holmesgpt-ray-job
+  namespace: holmesgpt-ft
+  labels:
+    component: ray-job
+spec:
+  entrypoint: python3 training_engine/train.py
+  runtimeEnv: |
+    working_dir: /app
+    pip:
+      - torch>=2.0.0
+      - transformers>=4.35.0
+      - datasets>=2.14.0
+      - trl>=0.7.0
+      - wandb>=0.15.0
+  rayClusterSpec:
+    rayVersion: '2.8.0'
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray:2.8.0-gpu
+            resources:
+              limits:
+                cpu: "4"
+                memory: "8Gi"
+              requests:
+                cpu: "2"
+                memory: "4Gi"
+            ports:
+            - containerPort: 6379
+              name: gcs
+            - containerPort: 8265
+              name: dashboard
+            - containerPort: 10001
+              name: client
+            volumeMounts:
+            - mountPath: /app
+              name: code-volume
+          volumes:
+          - name: code-volume
+            emptyDir: {}
+    workerGroupSpecs:
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 5
+      groupName: gpu-group
+      rayStartParams: {}
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray:2.8.0-gpu
+            resources:
+              limits:
+                cpu: "8"
+                memory: "16Gi"
+                nvidia.com/gpu: "1"
+              requests:
+                cpu: "4"
+                memory: "8Gi"
+                nvidia.com/gpu: "1"
+            volumeMounts:
+            - mountPath: /app
+              name: code-volume
+          volumes:
+          - name: code-volume
+              emptyDir: {}
