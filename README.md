@@ -17,6 +17,29 @@ The Sovereign SRE Agent project aims to create autonomous AI agents capable of d
 
 ---
 
+## 🔄 Relationship with HolmesGPT
+
+This project builds upon **HolmesGPT** analysis results:
+
+- **SKILL.md files** in `training_engine/skills/` are generated from HolmesGPT's incident analysis
+- HolmesGPT provides the **raw troubleshooting expertise** that we convert into training data
+- After fine-tuning, the resulting model becomes a **specialized SRE agent** focused on your specific infrastructure patterns
+
+### Do you still need HolmesGPT after training?
+
+**Yes, but for different purposes:**
+
+1. **During Training:** HolmesGPT generates new SKILL.md files for expanding the training dataset
+2. **Post-Training:** HolmesGPT serves as a **complementary tool** for:
+   - Generating new training data for model updates
+   - Handling edge cases the fine-tuned model hasn't seen
+   - Providing human-in-the-loop oversight for critical incidents
+   - Creating specialized agents for different infrastructure domains
+
+The fine-tuned model becomes your **primary autonomous agent**, while HolmesGPT becomes your **expert system for continuous improvement**.
+
+---
+
 ## 🏗️ Architectural Topology
 
 The system separates concerns across three clear boundaries:
@@ -48,7 +71,7 @@ The system separates concerns across three clear boundaries:
    ```
 
 3. **Prepare your training data:**
-   - Add your incident documentation to `training_engine/skills/` as `.md` files
+   - Add HolmesGPT-generated incident documentation to `training_engine/skills/` as `.md` files
    - Run the data pipeline: `python3 training_engine/convert.py`
 
 4. **Start training:**
@@ -63,7 +86,7 @@ The system separates concerns across three clear boundaries:
 ```
 .
 ├── training_engine/
-│   ├── skills/           # Incident documentation files
+│   ├── skills/           # HolmesGPT-generated incident documentation files
 │   ├── convert.py        # Data pipeline for converting SKILL.md to training data
 │   ├── reward.py         # Reward functions to prevent reward hacking
 │   ├── train.py          # Distributed GRPO training script
@@ -81,13 +104,13 @@ The system separates concerns across three clear boundaries:
 ## 🛠️ Core Components
 
 ### 1. Data Pipeline (`convert.py`)
-Transforms unstructured SRE incident runbooks into structured, tokenizable training data that follows OpenAI/ShareGPT specifications.
+Transforms HolmesGPT-generated SRE incident runbooks into structured, tokenizable training data that follows OpenAI/ShareGPT specifications.
 
 ### 2. Reward Functions (`reward.py`)
-Implements bulletproof reward mechanisms to prevent reward hacking and ensure the model learns proper troubleshooting patterns.
+Implements bulletproof reward mechanisms to prevent reward hacking and ensure the model learns proper troubleshooting patterns from HolmesGPT expertise.
 
 ### 3. Training Engine (`train.py`)
-Distributed GRPO training script that orchestrates model fine-tuning across Kubernetes cluster using Ray.
+Distributed GRPO training script that orchestrates model fine-tuning across Kubernetes cluster using Ray, converting HolmesGPT knowledge into autonomous capabilities.
 
 ### 4. Live Agent (`run_live_agent.py`)
 Interactive interface for testing the trained model with real Kubernetes troubleshooting scenarios.
@@ -140,9 +163,10 @@ ray job submit --address http://localhost:8265 -- python3 training_engine/train.
 
 ## 📈 Next Steps
 
-1. **Customize incident documentation** in `training_engine/skills/`
-2. **Adjust reward functions** in `training_engine/reward.py` for your specific use case
+1. **Generate SKILL.md files** using HolmesGPT analysis on your infrastructure incidents
+2. **Customize reward functions** in `training_engine/reward.py` for your specific use case
 3. **Scale training infrastructure** across multiple GPU nodes
 4. **Integrate with existing monitoring systems** for production deployment
+5. **Continuously improve** by feeding new HolmesGPT analysis results back into training
 
 For detailed implementation guidance, refer to the individual component files in the `training_engine/` directory.
