@@ -90,6 +90,7 @@ The system separates concerns across three clear boundaries:
 │   ├── convert.py        # Data pipeline for converting SKILL.md to training data
 │   ├── reward.py         # Reward functions to prevent reward hacking
 │   ├── train.py          # Distributed GRPO training script
+│   ├── monitor.py        # Training monitoring with TensorBoard
 │   └── dataset.jsonl     # Generated training dataset
 ├── Dockerfile            # Containerization configuration
 ├── manifest.yaml         # Kubernetes deployment manifests
@@ -112,14 +113,36 @@ Implements bulletproof reward mechanisms to prevent reward hacking and ensure th
 ### 3. Training Engine (`train.py`)
 Distributed GRPO training script that orchestrates model fine-tuning across Kubernetes cluster using Ray, converting HolmesGPT knowledge into autonomous capabilities.
 
-### 4. Live Agent (`run_live_agent.py`)
+### 4. Training Monitor (`monitor.py`)
+Real-time training monitoring with TensorBoard integration for visualizing KL divergence, reward curves, and training metrics.
+
+### 5. Live Agent (`run_live_agent.py`)
 Interactive interface for testing the trained model with real Kubernetes troubleshooting scenarios.
 
 ---
 
 ## 📊 Monitoring & Metrics
 
-When tracking your model optimization runs, monitor these key metrics:
+### Real-time Training Monitoring
+
+This project includes comprehensive monitoring capabilities through **TensorBoard** and **Weights & Biases**:
+
+#### TensorBoard Monitoring
+```bash
+# Start TensorBoard during training
+tensorboard --logdir ray_qwen_k8s_output/logs --port 6006
+
+# Or use the built-in monitor
+python3 training_engine/monitor.py --port 6006
+```
+
+#### Available Metrics Dashboards:
+- **KL Divergence**: Track model drift and prevent catastrophic forgetting
+- **Reward Curves**: Monitor reward ascent and detect reward hacking
+- **Loss Values**: Observe training convergence
+- **Gradient Norms**: Detect training instability
+
+#### Key Metrics to Watch:
 
 ### KL Divergence Plateau (Model Drift Tracking)
 - **Sweet Spot:** Value should plateau between `0.08` and `0.18`
@@ -128,6 +151,20 @@ When tracking your model optimization runs, monitor these key metrics:
 ### Mean Reward Ascent
 - **Sweet Spot:** Clean upward staircase curve stabilizing around net positive scores
 - **Danger Zone:** If reward maxes out but outputs garbage, the model has hacked validation
+
+### Monitoring Commands
+```bash
+# Start monitoring during training
+python3 training_engine/monitor.py
+
+# Start TensorBoard separately
+tensorboard --logdir ray_qwen_k8s_output/logs
+
+# Monitor with custom port
+python3 training_engine/monitor.py --port 8080
+```
+
+
 
 ---
 

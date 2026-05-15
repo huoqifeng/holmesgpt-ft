@@ -9,3 +9,4 @@ accelerate>=0.24.0
 peft>=0.6.0
 bitsandbytes>=0.41.0
 scipy>=1.11.0
+tensorboard>=2.14.0
