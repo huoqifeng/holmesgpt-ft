@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: holmesgpt-ft
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: holmesgpt-training
+  namespace: holmesgpt-ft
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: holmesgpt-training
+  template:
+    metadata:
+      labels:
+        app: holmesgpt-training
+    spec:
+      containers:
+      - name: training-container
+        image: holmesgpt-ft:latest
+        resources:
+          requests:
+            cpu: "2"
+            memory: "8Gi"
+          limits:
+            cpu: "4"
+            memory: "16Gi"
+        volumeMounts:
+        - name: training-data
+          mountPath: /app/training_engine/skills
+        - name: output-data
+          mountPath: /app/output
+        env:
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-secret
+              key: api-key
+        - name: RAY_DISABLE_IMPORT_WARNING
+          value: "1"
+      volumes:
+      - name: training-data
+        configMap:
+          name: training-skills
+      - name: output-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: holmesgpt-training-service
+  namespace: holmesgpt-ft
+spec:
+  selector:
+    app: holmesgpt-training
+  ports:
+  - port: 8265
+    targetPort: 8265
+    name: ray-dashboard
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: training-skills
+  namespace: holmesgpt-ft
+data:
+  incident_001.md: |
+    # Incident: Pod CrashLoopBackOff
+    # Prompt
+    A pod in the production namespace is in CrashLoopBackOff state. Investigate and resolve the issue.
+    # Investigation Steps
+    Let's first check the pod status:
+    ```bash
+    kubectl get pods -n production
+    ```
+    # Resolution
+    The issue was resolved by adding proper permissions for the nginx container.
+
+  incident_002.md: |
+    # Incident: High Memory Usage
+    # Prompt
+    The cluster is experiencing high memory usage. Identify the cause and implement a solution.
+    # Investigation Steps
+    Let's first check the overall cluster resource usage:
+    ```bash
+    kubectl top nodes
+    ```
+    # Resolution
+    The high memory usage issue was resolved by reducing memory limits and adding resource quotas.
