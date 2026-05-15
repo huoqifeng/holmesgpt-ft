@@ -61,6 +61,30 @@ data:
     The high memory usage issue was resolved by reducing memory limits and adding resource quotas.
 
 ---
+# Volcano PodGroup for Ray Head Node
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: PodGroup
+metadata:
+  name: ray-head-podgroup
+  namespace: holmesgpt-ft
+spec:
+  minMember: 1
+  queue: default
+  priorityClassName: high-priority
+
+---
+# Volcano PodGroup for Ray Workers
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: PodGroup
+metadata:
+  name: ray-worker-podgroup
+  namespace: holmesgpt-ft
+spec:
+  minMember: 2
+  queue: default
+  priorityClassName: high-priority
+
+---
 # Training Job - Data Pipeline Mode
 apiVersion: batch/v1
 kind: Job
@@ -72,6 +96,7 @@ metadata:
 spec:
   template:
     spec:
+      schedulerName: volcano  # Use Volcano scheduler
       containers:
       - name: data-pipeline
         image: holmesgpt-ft:latest
@@ -97,7 +122,7 @@ spec:
         emptyDir: {}
 
 ---
-# Training Deployment - Training Mode
+# Training Deployment - Training Mode with Volcano
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -114,7 +139,10 @@ spec:
     metadata:
       labels:
         app: holmesgpt-training
+        ray-node-type: head
+        volcano.sh/job-name: ray-head
     spec:
+      schedulerName: volcano  # Use Volcano scheduler
       containers:
       - name: training-container
         image: holmesgpt-ft:latest
@@ -176,6 +204,7 @@ spec:
       labels:
         app: holmesgpt-monitor
     spec:
+      schedulerName: volcano  # Use Volcano scheduler
       containers:
       - name: monitor-container
         image: holmesgpt-ft:latest
@@ -198,6 +227,48 @@ spec:
         emptyDir: {}
 
 ---
+# Ray Worker Deployment with Volcano
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: holmesgpt-ray-workers
+  namespace: holmesgpt-ft
+  labels:
+    component: ray-workers
+spec:
+  replicas: 0  # Start with 0, scale up when needed
+  selector:
+    matchLabels:
+      app: holmesgpt-ray-workers
+  template:
+    metadata:
+      labels:
+        app: holmesgpt-ray-workers
+        ray-node-type: worker
+        volcano.sh/job-name: ray-worker
+    spec:
+      schedulerName: volcano  # Use Volcano scheduler
+      containers:
+      - name: ray-worker
+        image: rayproject/ray:2.8.0-gpu
+        command: ["ray", "start", "--address=holmesgpt-training:6379", "--num-gpus=1"]
+        resources:
+          limits:
+            cpu: "8"
+            memory: "16Gi"
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "4"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: logs
+          mountPath: /app/training_engine/ray_qwen_k8s_output/logs
+      volumes:
+      - name: logs
+        emptyDir: {}
+
+---
 # Services
 apiVersion: v1
 kind: Service
@@ -214,6 +285,9 @@ spec:
   - port: 6006
     targetPort: 6006
     name: tensorboard
+  - port: 6379
+    targetPort: 6379
+    name: gcs
   type: ClusterIP
 
 ---
@@ -232,7 +306,7 @@ spec:
   type: ClusterIP
 
 ---
-# Example: Ray Job for distributed training
+# Example: Ray Job for distributed training with Volcano
 apiVersion: ray.io/v1alpha1
 kind: RayJob
 metadata:
@@ -257,6 +331,7 @@ spec:
         dashboard-host: '0.0.0.0'
       template:
         spec:
+          schedulerName: volcano  # Use Volcano scheduler
           containers:
           - name: ray-head
             image: rayproject/ray:2.8.0-gpu
@@ -288,6 +363,7 @@ spec:
       rayStartParams: {}
       template:
         spec:
+          schedulerName: volcano  # Use Volcano scheduler
           containers:
           - name: ray-worker
             image: rayproject/ray:2.8.0-gpu
@@ -306,3 +382,30 @@ spec:
           volumes:
           - name: code-volume
               emptyDir: {}
+
+---
+# Volcano Queue for HolmesGPT workloads
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: holmesgpt-queue
+  namespace: holmesgpt-ft
+spec:
+  weight: 1
+  capability:
+    cpu: 32
+    memory: 128Gi
+  reclaimable: true
+  deserved:
+    cpu: 32
+    memory: 128Gi
+
+---
+# PriorityClass for HolmesGPT workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "High priority for HolmesGPT training workloads"

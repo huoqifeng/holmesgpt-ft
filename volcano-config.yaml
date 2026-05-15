@@ -1,0 +1,47 @@
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: Queue
+metadata:
+  name: holmesgpt-queue
+  namespace: holmesgpt-ft
+spec:
+  weight: 1
+  capability:
+    cpu: "64"
+    memory: "256Gi"
+    nvidia.com/gpu: "8"
+  reclaimable: true
+  deserved:
+    cpu: "64"
+    memory: "256Gi"
+    nvidia.com/gpu: "8"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: holmesgpt-high-priority
+value: 1000000
+globalDefault: false
+description: "High priority for HolmesGPT training workloads"
+
+---
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: PodGroup
+metadata:
+  name: holmesgpt-head-podgroup
+  namespace: holmesgpt-ft
+spec:
+  minMember: 1
+  queue: holmesgpt-queue
+  priorityClassName: holmesgpt-high-priority
+
+---
+apiVersion: scheduling.volcano.sh/v1beta1
+kind: PodGroup
+metadata:
+  name: holmesgpt-worker-podgroup
+  namespace: holmesgpt-ft
+spec:
+  minMember: 2
+  queue: holmesgpt-queue
+  priorityClassName: holmesgpt-high-priority

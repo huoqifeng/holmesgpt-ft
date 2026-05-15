@@ -5,6 +5,11 @@ from trl import GRPOConfig, GRPOTrainer
 from reward import format_reward_func, kubectl_syntax_reward_func
 
 # Connect to the running Kubernetes Ray Cluster Head Node
+# Check if running in Volcano-scheduled environment
+volcano_scheduled = os.environ.get('VOLCANO_JOB_NAME') is not None
+if volcano_scheduled:
+    print("🌋 Detected Volcano scheduler - optimizing for batch scheduling")
+    
 ray.init(address="auto", ignore_reinit_error=True)
 
 model_id = "Qwen/Qwen2.5-7B-Instruct"
@@ -35,8 +40,12 @@ trainer = GRPOTrainer(
 print("🚀 Starting training with TensorBoard monitoring...")
 print("📊 View training progress at: http://localhost:6006")
 print("📈 Monitor metrics: KL divergence, reward curves, loss values")
+if volcano_scheduled:
+    print("🌋 Volcano scheduler enabled for enhanced resource management")
 
 trainer.train()
 trainer.save_model("final_k8s_qwen_agent")
 print("🎉 Model successfully optimized and saved to 'final_k8s_qwen_agent'")
 print("📊 Final training metrics available in TensorBoard logs")
+if volcano_scheduled:
+    print("🌋 Volcano scheduling completed successfully")

@@ -93,7 +93,8 @@ The system separates concerns across three clear boundaries:
 │   ├── monitor.py        # Training monitoring with TensorBoard
 │   └── dataset.jsonl     # Generated training dataset
 ├── Dockerfile            # Containerization configuration
-├── manifest.yaml         # Comprehensive Kubernetes deployment manifests
+├── manifest.yaml         # Comprehensive Kubernetes deployment manifests with Volcano support
+├── volcano-config.yaml   # Volcano scheduler configuration
 ├── requirements.txt      # Python dependencies
 ├── run_live_agent.py     # Interactive agent testing interface
 ├── setup.py             # Automated setup script
@@ -116,7 +117,10 @@ Distributed GRPO training script that orchestrates model fine-tuning across Kube
 ### 4. Training Monitor (`monitor.py`)
 Real-time training monitoring with TensorBoard integration for visualizing KL divergence, reward curves, and training metrics.
 
-### 5. Live Agent (`run_live_agent.py`)
+### 5. Volcano Scheduler Integration
+Enhanced batch scheduling with Volcano for gang scheduling, resource fairness, and priority-based job management.
+
+### 6. Live Agent (`run_live_agent.py`)
 Interactive interface for testing the trained model with real Kubernetes troubleshooting scenarios.
 
 ---
@@ -179,6 +183,26 @@ This project establishes several premium skill competencies:
 ---
 
 ## 🔧 Advanced Usage
+
+### Volcano Integration
+This project supports **Volcano** for enhanced batch scheduling and resource management:
+
+```bash
+# Install Volcano (if not already installed)
+kubectl apply -f https://raw.githubusercontent.com/volcano-sh/volcano/master/installer/volcano-development.yaml
+
+# Deploy Volcano-specific configurations
+kubectl apply -f volcano-config.yaml
+
+# Deploy with Volcano scheduler
+kubectl apply -f manifest.yaml
+```
+
+**Volcano Benefits:**
+- **Gang Scheduling**: Ensures all Ray workers start together
+- **Resource Fairness**: Better resource allocation across teams
+- **Queue Management**: Priority-based job scheduling
+- **Preemption**: High-priority jobs can preempt low-priority ones
 
 ### Container Deployment
 ```bash
