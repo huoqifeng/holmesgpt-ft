@@ -93,7 +93,8 @@ The system separates concerns across three clear boundaries:
 │   ├── monitor.py        # Training monitoring with TensorBoard
 │   └── dataset.jsonl     # Generated training dataset
 ├── Dockerfile            # Containerization configuration
-├── manifest.yaml         # Kubernetes deployment manifests
+├── k8s-deployment.yaml # Comprehensive Kubernetes deployment manifests
+├── manifest.yaml         # Basic Kubernetes deployment manifests
 ├── requirements.txt      # Python dependencies
 ├── run_live_agent.py     # Interactive agent testing interface
 ├── setup.py             # Automated setup script
@@ -182,18 +183,69 @@ This project establishes several premium skill competencies:
 
 ### Container Deployment
 ```bash
+# Build the container
 docker build -t holmesgpt-ft .
-docker run -p 8265:8265 holmesgpt-ft
+
+# Run data pipeline
+docker run holmesgpt-ft python3 convert.py
+
+# Run training with monitoring
+docker run -p 8265:8265 -p 6006:6006 holmesgpt-ft python3 train.py
+
+# Run only monitoring
+docker run -p 6006:6006 holmesgpt-ft python3 monitor.py
 ```
 
 ### Kubernetes Deployment
 ```bash
-kubectl apply -f manifest.yaml
+# Deploy all components
+kubectl apply -f k8s-deployment.yaml
+
+# Deploy specific components
+kubectl apply -f k8s-deployment.yaml -l component=data-pipeline
+kubectl apply -f k8s-deployment.yaml -l component=training
+kubectl apply -f k8s-deployment.yaml -l component=monitoring
+
+# Check deployment status
+kubectl get pods -n holmesgpt-ft
+
+# Access services
+kubectl port-forward svc/holmesgpt-training-service 8265:8265 -n holmesgpt-ft  # Ray Dashboard
+kubectl port-forward svc/holmesgpt-training-service 6006:6006 -n holmesgpt-ft  # TensorBoard
+kubectl port-forward svc/holmesgpt-monitor-service 6007:6006 -n holmesgpt-ft   # Monitoring
+```
+
+### Different Execution Modes in Kubernetes
+
+#### 1. Data Pipeline Mode
+```bash
+kubectl create job holmesgpt-data-pipeline \
+  --from=cronjob/holmesgpt-data-pipeline \
+  -n holmesgpt-ft
+```
+
+#### 2. Training Mode
+```bash
+# Scale training deployment
+kubectl scale deployment holmesgpt-training --replicas=1 -n holmesgpt-ft
+
+# Or use Ray Job for distributed training
+kubectl apply -f k8s-deployment.yaml -l component=ray-job
+```
+
+#### 3. Monitoring Mode
+```bash
+# Start monitoring deployment
+kubectl scale deployment holmesgpt-monitor --replicas=1 -n holmesgpt-ft
 ```
 
 ### Ray Job Submission
 ```bash
+# Submit training job to existing Ray cluster
 ray job submit --address http://localhost:8265 -- python3 training_engine/train.py
+
+# Monitor Ray jobs
+ray job list --address http://localhost:8265
 ```
 
 ---

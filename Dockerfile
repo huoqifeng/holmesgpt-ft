@@ -21,9 +21,8 @@ COPY training_engine/ ./training_engine/
 # Set working directory to training_engine
 WORKDIR /app/training_engine
 
-# Expose ports for Ray dashboard and TensorBoard
-EXPOSE 8265
-EXPOSE 6006
+# Expose ports for Ray dashboard, TensorBoard, and monitoring
+EXPOSE 8265 6006 8080
 
-# Default command
+# Default command - can be overridden
 CMD ["python3", "convert.py"]
